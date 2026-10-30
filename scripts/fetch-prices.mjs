@@ -49,13 +49,15 @@ async function steam() {
     if (total != null && start >= total) break;
     const url = `${STEAM_URL}?appid=730&norender=1&count=${STEAM_PAGE}&start=${start}&sort_column=name&sort_dir=asc&search_descriptions=0`;
     let body = null;
-    for (let attempt = 0; attempt <= STEAM_LIMIT_WAITS_MS.length; attempt++) {
+    // Steam often refuses GitHub's servers outright: on the first page one wait is enough to tell.
+    const waits = page === 0 ? STEAM_LIMIT_WAITS_MS.slice(0, 1) : STEAM_LIMIT_WAITS_MS;
+    for (let attempt = 0; attempt <= waits.length; attempt++) {
       try {
         body = await getJson(url);
         break;
       } catch (e) {
         error = e.message;
-        const wait = STEAM_LIMIT_WAITS_MS[attempt];
+        const wait = waits[attempt];
         if (wait == null) break;
         log(`Steam page ${page} failed (${e.message}); waiting ${wait / 1000} s`);
         await sleep(wait);

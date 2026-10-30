@@ -12,7 +12,7 @@ A daily CS2 price file for [NODEZERO](https://github.com/murathudavendigar/nodez
 | Source | What | How often |
 | --- | --- | --- |
 | [Skinport](https://skinport.com) public API (`/v1/items`, no key) | Suggested price, else lowest listing, else median; USD and EUR | Once a day, 2 requests |
-| Steam Community Market search (`/market/search/render`, no key) | Lowest listing (`sell_price`), USD | Once a day, 100 items a request, 4 s apart |
+| Steam Community Market search (`/market/search/render`, no key) | Lowest listing (`sell_price`), USD | Once a day, 100 items a request, 4 s apart. Steam refused GitHub's servers on the first run (2026-10-30, 429 on the first request), so `steam` is usually empty here; the job tries once a day and gives up after one minute. |
 
 Prices belong to those markets. This project is not affiliated with Valve or Skinport.
 
