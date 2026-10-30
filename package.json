@@ -1,0 +1,11 @@
+{
+  "name": "nodezero-prices",
+  "private": true,
+  "type": "module",
+  "description": "A daily CS2 price file for NODEZERO.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test scripts/*.test.mjs",
+    "fetch": "node scripts/fetch-prices.mjs"
+  }
+}

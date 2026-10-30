@@ -1,0 +1,54 @@
+name: Daily prices
+
+on:
+  schedule:
+    # Once a day at 03:17 UTC (night in Europe, outside the busy hour marks).
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      steam_max_pages:
+        description: "Steam pages to fetch (100 items each); empty for all"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prices
+  cancel-in-progress: false
+
+jobs:
+  prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Test
+        run: npm test
+
+      - name: Get yesterday's file
+        run: |
+          mkdir -p out
+          gh release download "$TAG" --pattern prices.json.gz --output out/previous.json.gz || echo "No earlier file"
+
+      - name: Fetch prices
+        env:
+          STEAM_MAX_PAGES: ${{ inputs.steam_max_pages || '600' }}
+        run: node scripts/fetch-prices.mjs
+
+      - name: Publish
+        run: |
+          if ! gh release view "$TAG" > /dev/null 2>&1; then
+            gh release create "$TAG" --title "Latest prices" --notes "Updated every day by the Daily prices workflow. Download: prices.json.gz (all prices) and meta.json (sources and dates)." --latest
+          fi
+          gh release upload "$TAG" out/prices.json.gz out/meta.json --clobber
+          cat out/meta.json >> "$GITHUB_STEP_SUMMARY"

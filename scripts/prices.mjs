@@ -1,0 +1,79 @@
+// Pure helpers for the daily price file: reading Skinport's and Steam's
+// replies and building the file. No network here; fetch-prices.mjs does that.
+
+export const FORMAT_VERSION = 1;
+
+const cents = (value) => (typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.round(value * 100) : null);
+
+/** Skinport `/v1/items` -> { name: cents }. Suggested price, else the lowest listing, else the median (as the app does). */
+export function readSkinport(body) {
+  const out = {};
+  if (!Array.isArray(body)) return out;
+  for (const item of body) {
+    const name = typeof item?.market_hash_name === "string" ? item.market_hash_name.trim() : "";
+    if (!name) continue;
+    const lowest = cents(item.min_price);
+    const value = cents(item.suggested_price) ?? lowest ?? cents(item.median_price);
+    if (value != null && value > 0) out[name] = value;
+  }
+  return out;
+}
+
+/** One Steam `market/search/render?norender=1` page -> { total, prices: { hash_name: cents } } (sell_price is in US cents). */
+export function readSteamPage(body) {
+  const prices = {};
+  if (!body || body.success === false || !Array.isArray(body.results)) return { total: null, prices };
+  for (const r of body.results) {
+    const name = typeof r?.hash_name === "string" ? r.hash_name : "";
+    const price = Number.isInteger(r?.sell_price) && r.sell_price > 0 ? r.sell_price : null;
+    if (name && price != null) prices[name] = price;
+  }
+  return { total: Number.isInteger(body.total_count) ? body.total_count : null, prices };
+}
+
+/**
+ * The file: per currency, name -> [steam, skinport] in cents (null when that
+ * market has none). A source that failed today keeps the previous file's
+ * values and date, so the app can tell how old each one is.
+ */
+export function buildFile({ now, skinport, steam, previous }) {
+  const sources = { skinport: {}, steam: null };
+  const values = {};
+  const put = (currency, name, slot, value) => {
+    const row = ((values[currency] ??= {})[name] ??= [null, null]);
+    row[slot] = value;
+  };
+  for (const currency of ["USD", "EUR"]) {
+    let fresh = skinport?.[currency];
+    let at = now;
+    if (!fresh || !Object.keys(fresh).length) {
+      fresh = previousColumn(previous, currency, 1);
+      at = previous?.sources?.skinport?.[currency]?.at ?? null;
+    }
+    if (fresh && Object.keys(fresh).length) {
+      for (const [name, value] of Object.entries(fresh)) put(currency, name, 1, value);
+      sources.skinport[currency] = { at, count: Object.keys(fresh).length };
+    }
+  }
+  let steamPrices = steam?.prices;
+  let steamInfo = steam ? { at: now, complete: steam.complete, error: steam.error ?? null } : null;
+  if (!steamPrices || !Object.keys(steamPrices).length) {
+    steamPrices = previousColumn(previous, "USD", 0);
+    const old = previous?.sources?.steam;
+    steamInfo = old ? { ...old, error: steam?.error ?? old.error ?? null } : steam ? { at: null, complete: false, error: steam.error ?? null } : null;
+  }
+  if (steamPrices && Object.keys(steamPrices).length) {
+    for (const [name, value] of Object.entries(steamPrices)) put("USD", name, 0, value);
+    steamInfo = { ...steamInfo, count: Object.keys(steamPrices).length };
+  }
+  sources.steam = steamInfo;
+  return { version: FORMAT_VERSION, generated_at: now, sources, ...values };
+}
+
+function previousColumn(previous, currency, slot) {
+  const rows = previous?.version === FORMAT_VERSION ? previous[currency] : null;
+  if (!rows) return null;
+  const out = {};
+  for (const [name, row] of Object.entries(rows)) if (Array.isArray(row) && row[slot] != null) out[name] = row[slot];
+  return out;
+}
