@@ -39,6 +39,7 @@ jobs:
         run: |
           mkdir -p out
           gh release download "$TAG" --pattern prices.json.gz --output out/previous.json.gz || echo "No earlier file"
+          gh release download "$TAG" --pattern sales.json.gz --output out/previous-sales.json.gz || echo "No earlier sales file"
 
       - name: Fetch prices
         env:
@@ -48,7 +49,7 @@ jobs:
       - name: Publish
         run: |
           if ! gh release view "$TAG" > /dev/null 2>&1; then
-            gh release create "$TAG" --title "Latest prices" --notes "Updated every day by the Daily prices workflow. Download: prices.json.gz (all prices) and meta.json (sources and dates)." --latest
+            gh release create "$TAG" --title "Latest prices" --notes "Updated every day by the Daily prices workflow. Download: prices.json.gz (all prices), sales.json.gz (Skinport sales history) and meta.json (sources and dates)." --latest
           fi
-          gh release upload "$TAG" out/prices.json.gz out/meta.json --clobber
+          gh release upload "$TAG" out/prices.json.gz out/sales.json.gz out/meta.json --clobber
           cat out/meta.json >> "$GITHUB_STEP_SUMMARY"

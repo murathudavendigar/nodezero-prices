@@ -5,11 +5,12 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { gunzipSync, gzipSync } from "node:zlib";
-import { buildFile, readSkinport, readSteamPage } from "./prices.mjs";
+import { buildFile, buildSalesFile, readSkinport, readSkinportSales, readSteamPage } from "./prices.mjs";
 
 const OUT = "out";
 const USER_AGENT = "nodezero-prices (+https://github.com/murathudavendigar/nodezero-prices)";
 const SKINPORT_URL = "https://api.skinport.com/v1/items";
+const SKINPORT_SALES_URL = "https://api.skinport.com/v1/sales/history";
 const STEAM_URL = "https://steamcommunity.com/market/search/render/";
 /** Steam blocks after about 20 requests a minute. */
 const STEAM_SPACING_MS = 4000;
@@ -36,6 +37,18 @@ async function skinport(currency) {
     return prices;
   } catch (e) {
     log(`Skinport ${currency} failed: ${e.message}`);
+    return null;
+  }
+}
+
+async function skinportSales(currency) {
+  try {
+    const body = await getJson(`${SKINPORT_SALES_URL}?app_id=730&currency=${currency}`, { "Accept-Encoding": "br, gzip" });
+    const list = readSkinportSales(body);
+    log(`Skinport sales ${currency}: ${list.length} items`);
+    return list;
+  } catch (e) {
+    log(`Skinport sales ${currency} failed: ${e.message}`);
     return null;
   }
 }
@@ -78,8 +91,8 @@ async function steam() {
   return { prices, complete, error: complete ? null : error };
 }
 
-function previousFile() {
-  const path = `${OUT}/previous.json.gz`;
+function previousFile(name = "previous.json.gz") {
+  const path = `${OUT}/${name}`;
   if (!existsSync(path)) return null;
   try {
     return JSON.parse(gunzipSync(readFileSync(path)).toString("utf8"));
@@ -91,6 +104,8 @@ function previousFile() {
 const now = Math.floor(Date.now() / 1000);
 mkdirSync(OUT, { recursive: true });
 const sp = { USD: await skinport("USD"), EUR: await skinport("EUR") };
+// Four Skinport requests in all: its limit is 8 in 5 minutes.
+const sales = { USD: await skinportSales("USD"), EUR: await skinportSales("EUR") };
 const st = process.env.SKIP_STEAM ? null : await steam();
 const file = buildFile({ now, skinport: sp, steam: st, previous: previousFile() });
 const rows = (c) => Object.keys(file[c] ?? {}).length;
@@ -99,6 +114,14 @@ if (!rows("USD") && !rows("EUR")) {
   process.exit(1);
 }
 writeFileSync(`${OUT}/prices.json.gz`, gzipSync(JSON.stringify(file), { level: 9 }));
-const meta = { version: file.version, generated_at: file.generated_at, sources: file.sources, rows: { USD: rows("USD"), EUR: rows("EUR") } };
+const salesFile = buildSalesFile({ now, sales, previous: previousFile("previous-sales.json.gz") });
+writeFileSync(`${OUT}/sales.json.gz`, gzipSync(JSON.stringify(salesFile), { level: 9 }));
+const meta = {
+  version: file.version,
+  generated_at: file.generated_at,
+  sources: file.sources,
+  rows: { USD: rows("USD"), EUR: rows("EUR") },
+  sales: salesFile.sources,
+};
 writeFileSync(`${OUT}/meta.json`, JSON.stringify(meta, null, 2));
 log("Written", JSON.stringify(meta));

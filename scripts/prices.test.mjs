@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildFile, readSkinport, readSteamPage } from "./prices.mjs";
+import { buildFile, buildSalesFile, readSkinport, readSkinportSales, readSteamPage } from "./prices.mjs";
 
 test("reads Skinport like the app", () => {
   const got = readSkinport([
@@ -38,4 +38,35 @@ test("builds the file and keeps yesterday's values for a failed source", () => {
   assert.equal(second.sources.skinport.EUR.at, 100, "EUR keeps its old date");
   assert.equal(second.sources.steam.at, 100);
   assert.equal(second.sources.steam.error, "429");
+});
+
+test("trims Skinport's sales to what the app reads", () => {
+  const got = readSkinportSales([
+    {
+      market_hash_name: "Kilowatt Case",
+      currency: "USD",
+      item_page: "https://skinport.com/x",
+      last_24_hours: { min: 0.08, max: 0.17, avg: 0.16, median: 0.17, volume: 42 },
+      last_7_days: { min: 0.08, max: 0.2, avg: 0.15, median: 0.16, volume: 300 },
+      last_30_days: { min: null, max: null, avg: null, median: null, volume: 0 },
+    },
+    { market_hash_name: "Never sold", last_90_days: { volume: 0 } },
+  ]);
+  assert.deepEqual(got, [
+    {
+      market_hash_name: "Kilowatt Case",
+      last_24_hours: { min: 0.08, max: 0.17, avg: 0.16, median: 0.17, volume: 42 },
+      last_7_days: { min: 0.08, max: 0.2, avg: 0.15, median: 0.16, volume: 300 },
+    },
+  ]);
+});
+
+test("the sales file keeps yesterday's list for a currency that failed", () => {
+  const row = { market_hash_name: "A", last_7_days: { median: 1, volume: 5 } };
+  const first = buildSalesFile({ now: 100, sales: { USD: [row], EUR: [row] } });
+  assert.deepEqual(first.sources, { USD: { at: 100, count: 1 }, EUR: { at: 100, count: 1 } });
+  const second = buildSalesFile({ now: 200, sales: { USD: [row], EUR: null }, previous: first });
+  assert.equal(second.sources.USD.at, 200);
+  assert.equal(second.sources.EUR.at, 100);
+  assert.deepEqual(second.EUR, [row]);
 });

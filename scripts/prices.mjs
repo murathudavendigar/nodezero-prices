@@ -77,3 +77,46 @@ function previousColumn(previous, currency, slot) {
   for (const [name, row] of Object.entries(rows)) if (Array.isArray(row) && row[slot] != null) out[name] = row[slot];
   return out;
 }
+
+const PERIODS = ["last_24_hours", "last_7_days", "last_30_days", "last_90_days"];
+const FIELDS = ["min", "max", "avg", "median", "volume"];
+
+/**
+ * Skinport `/v1/sales/history` -> the same shape, trimmed: only items that sold
+ * in the last 90 days, only periods with sales, only the fields the app reads.
+ * Values stay in Skinport's units, so the app reads them with its usual parser.
+ */
+export function readSkinportSales(body) {
+  if (!Array.isArray(body)) return [];
+  const out = [];
+  for (const item of body) {
+    const name = typeof item?.market_hash_name === "string" ? item.market_hash_name.trim() : "";
+    if (!name) continue;
+    const row = { market_hash_name: name };
+    for (const period of PERIODS) {
+      const p = item[period];
+      if (!p || !(p.volume > 0)) continue;
+      row[period] = Object.fromEntries(FIELDS.filter((f) => typeof p[f] === "number" && Number.isFinite(p[f])).map((f) => [f, p[f]]));
+    }
+    if (Object.keys(row).length > 1) out.push(row);
+  }
+  return out;
+}
+
+/** The sales file: per currency, Skinport's trimmed sales list; a failed currency keeps yesterday's. */
+export function buildSalesFile({ now, sales, previous }) {
+  const file = { version: FORMAT_VERSION, generated_at: now, sources: {} };
+  for (const currency of ["USD", "EUR"]) {
+    let list = sales?.[currency];
+    let at = now;
+    if (!list?.length && previous?.version === FORMAT_VERSION && Array.isArray(previous[currency])) {
+      list = previous[currency];
+      at = previous.sources?.[currency]?.at ?? null;
+    }
+    if (list?.length) {
+      file[currency] = list;
+      file.sources[currency] = { at, count: list.length };
+    }
+  }
+  return file;
+}
