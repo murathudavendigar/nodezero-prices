@@ -13,6 +13,8 @@ on:
 
 permissions:
   contents: write
+  # For "Keep the schedule alive" below.
+  actions: write
 
 concurrency:
   group: prices
@@ -53,3 +55,10 @@ jobs:
           fi
           gh release upload "$TAG" out/prices.json.gz out/sales.json.gz out/meta.json --clobber
           cat out/meta.json >> "$GITHUB_STEP_SUMMARY"
+
+      # GitHub turns off scheduled workflows in a repository with no commits for
+      # 60 days, and this job never commits. Enabling the workflow again on every
+      # run is how keepalive tools prevent that, without commits.
+      - name: Keep the schedule alive
+        if: always()
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/prices.yml/enable"

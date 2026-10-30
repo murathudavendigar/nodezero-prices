@@ -51,4 +51,5 @@ Skinport's own shape and units, trimmed: only items sold in the last 90 days, on
 ## Run
 
 - Every day at 03:17 UTC, or by hand: Actions → Daily prices → Run workflow (`steam_max_pages` limits Steam for a quick test).
+- GitHub turns off scheduled workflows after 60 days without commits; each run enables the workflow again so the schedule stays on. A failed run is emailed to the repository owner by GitHub. If the schedule ever stops, Actions → Daily prices → Enable workflow turns it back on.
 - Locally: `npm test`, then `npm run fetch` (writes `out/`; `SKIP_STEAM=1` skips Steam).
