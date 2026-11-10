@@ -1,6 +1,6 @@
 // Builds the daily price file: Skinport's whole list (USD and EUR) and Steam
 // Market's search pages (USD), into out/prices.json.gz and out/meta.json, and
-// the ECB dollar-to-euro rates since 1999 into out/rates.json.gz.
+// the ECB dollar-to-euro rates since August 2013 into out/rates.json.gz.
 // A source that fails keeps yesterday's values (read from out/previous.json.gz).
 // Run: node scripts/fetch-prices.mjs   (STEAM_MAX_PAGES limits Steam for a quick test)
 
@@ -13,8 +13,11 @@ const USER_AGENT = "nodezero-prices (+https://github.com/murathudavendigar/nodez
 const SKINPORT_URL = "https://api.skinport.com/v1/items";
 const SKINPORT_SALES_URL = "https://api.skinport.com/v1/sales/history";
 const STEAM_URL = "https://steamcommunity.com/market/search/render/";
-/** ECB reference rates through Frankfurter (no key): every working day since 1999. */
-const RATES_URL = "https://api.frankfurter.dev/v1/1999-01-01..?base=USD&symbols=EUR";
+/**
+ * ECB reference rates through Frankfurter (no key): every working day since
+ * the Arms Deal update (2013-08-14) brought skins, so no purchase is older.
+ */
+const RATES_URL = "https://api.frankfurter.dev/v1/2013-08-01..?base=USD&symbols=EUR";
 /** Steam blocks after about 20 requests a minute. */
 const STEAM_SPACING_MS = 4000;
 const STEAM_PAGE = 100;
