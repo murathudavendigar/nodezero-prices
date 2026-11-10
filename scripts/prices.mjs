@@ -120,3 +120,40 @@ export function buildSalesFile({ now, sales, previous }) {
   }
   return file;
 }
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Frankfurter's time series (`base=USD&symbols=EUR`) -> { "YYYY-MM-DD": euros per dollar }. */
+export function readRates(body) {
+  const out = {};
+  const rates = body?.base === "USD" && body.rates && typeof body.rates === "object" ? body.rates : {};
+  for (const [day, row] of Object.entries(rates)) {
+    const rate = row?.EUR;
+    if (DAY.test(day) && typeof rate === "number" && Number.isFinite(rate) && rate > 0) out[day] = rate;
+  }
+  return out;
+}
+
+/**
+ * The rates file: every ECB working day's dollar-to-euro rate, oldest first.
+ * When today's request fails the previous file is kept as it was.
+ */
+export function buildRates({ now, rates, previous }) {
+  let days = rates && Object.keys(rates).length ? rates : null;
+  let at = now;
+  if (!days && previous?.version === FORMAT_VERSION && previous.EUR) {
+    days = previous.EUR;
+    at = previous.at ?? null;
+  }
+  if (!days) return null;
+  const sorted = Object.fromEntries(Object.entries(days).sort(([a], [b]) => (a < b ? -1 : 1)));
+  return { version: FORMAT_VERSION, generated_at: now, at, base: "USD", EUR: sorted };
+}
+
+/** The rates line in meta.json: the newest day and its rate. */
+export function ratesMeta(file) {
+  const days = Object.keys(file?.EUR ?? {});
+  if (!days.length) return null;
+  const date = days[days.length - 1];
+  return { at: file.at, date, USD_EUR: file.EUR[date], count: days.length };
+}

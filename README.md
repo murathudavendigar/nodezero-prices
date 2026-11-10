@@ -6,6 +6,7 @@ A daily CS2 price file for [NODEZERO](https://github.com/murathudavendigar/nodez
 
 - All prices: https://github.com/murathudavendigar/nodezero-prices/releases/download/latest/prices.json.gz
 - Skinport sales history: https://github.com/murathudavendigar/nodezero-prices/releases/download/latest/sales.json.gz
+- ECB dollar-to-euro rates since 1999: https://github.com/murathudavendigar/nodezero-prices/releases/download/latest/rates.json.gz
 - Sources and dates only: https://github.com/murathudavendigar/nodezero-prices/releases/download/latest/meta.json
 
 ## Sources
@@ -15,6 +16,7 @@ A daily CS2 price file for [NODEZERO](https://github.com/murathudavendigar/nodez
 | [Skinport](https://skinport.com) public API (`/v1/items`, no key) | Suggested price, else lowest listing, else median; USD and EUR | Once a day, 2 requests |
 | [Skinport](https://skinport.com) public API (`/v1/sales/history`, no key) | Sales of the last 24 hours, 7, 30 and 90 days (min, max, avg, median, volume); USD and EUR | Once a day, 2 requests |
 | Steam Community Market search (`/market/search/render`, no key) | Lowest listing (`sell_price`), USD | Once a day, 100 items a request, 4 s apart. Steam refused GitHub's servers on the first run (2026-10-30, 429 on the first request), so `steam` is usually empty here; the job tries once a day and gives up after one minute. |
+| [Frankfurter](https://frankfurter.dev) (`/v1/1999-01-01..?base=USD&symbols=EUR`, no key) | European Central Bank reference rate, euros per dollar, every working day since 1999 | Once a day, 1 request |
 
 Prices belong to those markets. This project is not affiliated with Valve or Skinport.
 
@@ -47,6 +49,14 @@ Each item is `[steam, skinport]` in cents; `null` when that market has no price.
 ```
 
 Skinport's own shape and units, trimmed: only items sold in the last 90 days, only periods with sales. A currency that failed keeps yesterday's list and date.
+
+## Rates file (`rates.json.gz`, `version` 1)
+
+```json
+{ "version": 1, "generated_at": 1793862000, "at": 1793862000, "base": "USD", "EUR": { "1999-01-04": 0.84825, "2026-11-09": 0.89342 } }
+```
+
+Euros per dollar for every ECB working day (no weekends or holidays: use the day before), oldest first. When the request fails the previous file stays, with its old `at`. `meta.json` has the newest day as `rates: { at, date, USD_EUR, count }`.
 
 ## Run
 

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildFile, buildSalesFile, readSkinport, readSkinportSales, readSteamPage } from "./prices.mjs";
+import { buildFile, buildRates, buildSalesFile, ratesMeta, readRates, readSkinport, readSkinportSales, readSteamPage } from "./prices.mjs";
 
 test("reads Skinport like the app", () => {
   const got = readSkinport([
@@ -69,4 +69,19 @@ test("the sales file keeps yesterday's list for a currency that failed", () => {
   assert.equal(second.sources.USD.at, 200);
   assert.equal(second.sources.EUR.at, 100);
   assert.deepEqual(second.EUR, [row]);
+});
+
+test("reads ECB rates and keeps yesterday's file when the request fails", () => {
+  const rates = readRates({ base: "USD", rates: { "2026-11-09": { EUR: 0.89342 }, "2026-11-06": { EUR: 0.89566 }, bad: { EUR: 1 }, "2026-11-10": { EUR: 0 } } });
+  assert.deepEqual(rates, { "2026-11-09": 0.89342, "2026-11-06": 0.89566 });
+  assert.deepEqual(readRates({ base: "EUR", rates: { "2026-11-09": { EUR: 1 } } }), {});
+
+  const first = buildRates({ now: 100, rates });
+  assert.deepEqual(Object.keys(first.EUR), ["2026-11-06", "2026-11-09"], "oldest first");
+  assert.deepEqual(ratesMeta(first), { at: 100, date: "2026-11-09", USD_EUR: 0.89342, count: 2 });
+
+  const second = buildRates({ now: 200, rates: {}, previous: first });
+  assert.equal(second.at, 100, "keeps the old date");
+  assert.deepEqual(second.EUR, first.EUR);
+  assert.equal(buildRates({ now: 200, rates: null }), null);
 });

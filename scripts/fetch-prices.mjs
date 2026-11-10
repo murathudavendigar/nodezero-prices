@@ -1,17 +1,20 @@
 // Builds the daily price file: Skinport's whole list (USD and EUR) and Steam
-// Market's search pages (USD), into out/prices.json.gz and out/meta.json.
+// Market's search pages (USD), into out/prices.json.gz and out/meta.json, and
+// the ECB dollar-to-euro rates since 1999 into out/rates.json.gz.
 // A source that fails keeps yesterday's values (read from out/previous.json.gz).
 // Run: node scripts/fetch-prices.mjs   (STEAM_MAX_PAGES limits Steam for a quick test)
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { gunzipSync, gzipSync } from "node:zlib";
-import { buildFile, buildSalesFile, readSkinport, readSkinportSales, readSteamPage } from "./prices.mjs";
+import { buildFile, buildRates, buildSalesFile, ratesMeta, readRates, readSkinport, readSkinportSales, readSteamPage } from "./prices.mjs";
 
 const OUT = "out";
 const USER_AGENT = "nodezero-prices (+https://github.com/murathudavendigar/nodezero-prices)";
 const SKINPORT_URL = "https://api.skinport.com/v1/items";
 const SKINPORT_SALES_URL = "https://api.skinport.com/v1/sales/history";
 const STEAM_URL = "https://steamcommunity.com/market/search/render/";
+/** ECB reference rates through Frankfurter (no key): every working day since 1999. */
+const RATES_URL = "https://api.frankfurter.dev/v1/1999-01-01..?base=USD&symbols=EUR";
 /** Steam blocks after about 20 requests a minute. */
 const STEAM_SPACING_MS = 4000;
 const STEAM_PAGE = 100;
@@ -49,6 +52,17 @@ async function skinportSales(currency) {
     return list;
   } catch (e) {
     log(`Skinport sales ${currency} failed: ${e.message}`);
+    return null;
+  }
+}
+
+async function rates() {
+  try {
+    const days = readRates(await getJson(RATES_URL));
+    log(`ECB rates: ${Object.keys(days).length} days`);
+    return days;
+  } catch (e) {
+    log(`ECB rates failed: ${e.message}`);
     return null;
   }
 }
@@ -116,12 +130,15 @@ if (!rows("USD") && !rows("EUR")) {
 writeFileSync(`${OUT}/prices.json.gz`, gzipSync(JSON.stringify(file), { level: 9 }));
 const salesFile = buildSalesFile({ now, sales, previous: previousFile("previous-sales.json.gz") });
 writeFileSync(`${OUT}/sales.json.gz`, gzipSync(JSON.stringify(salesFile), { level: 9 }));
+const ratesFile = buildRates({ now, rates: await rates(), previous: previousFile("previous-rates.json.gz") });
+if (ratesFile) writeFileSync(`${OUT}/rates.json.gz`, gzipSync(JSON.stringify(ratesFile), { level: 9 }));
 const meta = {
   version: file.version,
   generated_at: file.generated_at,
   sources: file.sources,
   rows: { USD: rows("USD"), EUR: rows("EUR") },
   sales: salesFile.sources,
+  rates: ratesMeta(ratesFile),
 };
 writeFileSync(`${OUT}/meta.json`, JSON.stringify(meta, null, 2));
 log("Written", JSON.stringify(meta));
